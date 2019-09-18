@@ -40,21 +40,15 @@ class App(TimeStampedModel):
 
     @property
     def customers(self):
-        return auth0.AuthorizationAPI().get_group_members(group_name=self.slug) or []
+        return auth0.get_customers(self.slug)
 
     def add_customers(self, emails):
         emails = list(filter(None, emails))
         if emails:
-            auth0.AuthorizationAPI().add_group_members(
-                group_name=self.slug,
-                emails=emails,
-                user_options={"connection": "email"},
-            )
+            auth0.add_customers(self.slug, emails)
 
     def delete_customers(self, user_ids):
-        auth0.AuthorizationAPI().delete_group_members(
-            group_name=self.slug, user_ids=user_ids
-        )
+        auth0.delete_customers(self.slug, user_ids)
 
     @property
     def status(self):

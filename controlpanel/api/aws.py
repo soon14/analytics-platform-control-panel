@@ -198,6 +198,20 @@ class AWSClient(object):
             PathPrefix=prefix).get('Roles')
         return [r['RoleName'] for r in roles]
 
+    def create_ecr_repo(self, name):
+        self._do('ecr', 'create_repository',
+            repositoryName=name,
+        )
+
+    def get_ecr_repo(self, name):
+        results = self._do(
+            'ecr',
+            'describe_repositories',
+            repositoryNames=[name],
+            maxResults=1,
+        )
+        return next(iter(results['repositories']), None)
+
 
 aws = AWSClient()
 

@@ -44,10 +44,9 @@ class User(AbstractUser):
     @property
     def github_api_token(self):
         if not getattr(self, '_github_api_token', None):
-            auth0_user = auth0.ManagementAPI().get_user(self.auth0_id)
-            for identity in auth0_user["identities"]:
-                if identity['provider'] == 'github':
-                    self._github_api_token = identity.get('access_token')
+            identity = auth0.get_user_identity(self.auth0_id, 'github')
+            if identity:
+                self._github_api_token = identity.get('access_token')
         return self._github_api_token
 
     @github_api_token.setter
@@ -71,7 +70,7 @@ class User(AbstractUser):
         ).count() != 0
 
     def reset_mfa(self):
-        auth0.ManagementAPI().reset_mfa(self.auth0_id)
+        auth0.reset_mfa(self.auth0_id)
 
     def save(self, *args, **kwargs):
         try:

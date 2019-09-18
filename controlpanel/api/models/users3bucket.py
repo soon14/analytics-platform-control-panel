@@ -22,6 +22,9 @@ class UserS3Bucket(AccessToS3Bucket):
         unique_together = ('user', 's3bucket')
         ordering = ('id',)
 
+    def __repr__(self):
+        return f'<UserS3Bucket: {self.user!r} {self.s3bucket!r} (admin={self.is_admin!s})>'
+
     def aws_role_name(self):
         return self.user.iam_role_name
 

@@ -6,7 +6,9 @@ from django.conf import settings
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist
 from github import Github, GithubException
 
+from controlpanel.api.auth0 import AuthorizationAPI, ManagementAPI
 from controlpanel.api.aws import aws, iam_arn
+from controlpanel.api.concourse import Concourse
 from controlpanel.api.helm import helm
 from controlpanel.api.kubernetes import KubernetesClient
 
@@ -122,6 +124,45 @@ def purge_user(user):
     aws.delete_role(user.iam_role_name)
     helm.delete(helm.list_releases(f"--namespace=user-{user.slug}"))
     helm.delete(f"init-user-{user.slug}")
+
+
+def init_app(app):
+    create_app_role(app)
+
+    client = auth0.get_or_create_client({
+        'name': app.release_name,
+        'callbacks': [app.oidc_callback_url],
+        'allowed_origins': [app.url],
+        'web_origins': [app.url],
+        'grant_types': [], # TODO
+        'app_type': 'regular_web',
+    })
+    app.oidc_client_id = client['client_id']
+    app.oidc_client_secret = client['client_secret']
+
+    repo = aws.get_ecr_repo(app.release_name)
+    if repo is None:
+        repo = aws.create_ecr_repo(app.release_name)
+    app.docker_repo_uri = repo['repositoryUri']
+
+    Concourse().set_pipeline(
+        app._repo_name,
+        pipeline_yaml_filepath, # TODO
+        vars={
+            'app-name': app.release_name,
+            'github-org': app.github_org,
+            'github-repo': app.repo_name',
+        },
+    )
+
+    app.save()
+
+
+def purge_app(app):
+    Concourse().destroy_pipeline(app._repo_name)
+    # delete_ecr_repo(app)  # XXX not sure we'd want to do this
+    auth0.management().clients.delete(app.client_id)
+    delete_app_role(app)
 
 
 def create_app_role(name):

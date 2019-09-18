@@ -22,11 +22,7 @@ class UserList(LoginRequiredMixin, PermissionRequiredMixin, ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        users = auth0.ManagementAPI().list_users(
-            params={
-                'q': 'identities.connection:"github"'
-            },
-        )
+        users = auth0.get_users()
 
         last_logins = []
         for user in users:

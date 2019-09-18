@@ -1,9 +1,9 @@
-from collections import OrderedDict
-
-from auth0.v3 import authentication, exceptions
+import auth0.v3
 from django.conf import settings
 import requests
 from rest_framework.exceptions import APIException
+
+from controlpanel.auth0_authorization_extension import Authorization
 
 
 class Auth0Error(APIException):
@@ -12,219 +12,165 @@ class Auth0Error(APIException):
     default_detail = "Error querying Auth0 API"
 
 
-class APIClient:
-    base_url = None
-    audience = None
+def get_access_token(audience):
+    get_token = auth0.v3.authentication.GetToken(settings.OIDC_DOMAIN)
 
-    def __init__(self, **kwargs):
-        self.client_id = kwargs.get("client_id", settings.AUTH0["client_id"])
-        self.client_secret = kwargs.get(
-            "client_secret", settings.AUTH0["client_secret"]
-        )
-        self.domain = kwargs.get("domain", settings.AUTH0["domain"])
-        self._access_token = None
-
-    @property
-    def access_token(self):
-        if self._access_token is None:
-            get_token = authentication.GetToken(self.domain)
-
-            try:
-                token = get_token.client_credentials(
-                    self.client_id, self.client_secret, self.audience
-                )
-
-            except exceptions.Auth0Error as error:
-                raise Auth0Error(
-                    f"Failed getting Auth0 access token for client "
-                    f"{self.client_id} for audience {self.audience} "
-                    f"at {self.domain}: {error}"
-                )
-
-            self._access_token = token["access_token"]
-
-        return self._access_token
-
-    def request(self, method, endpoint, **kwargs):
-        base_url = self.base_url
-        if not base_url.endswith('/'):
-            base_url = base_url + '/'
-        url = f"{base_url}{endpoint}"
-        response = requests.request(
-            method,
-            url,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self.access_token}",
-            },
-            **kwargs,
-        )
-        response.raise_for_status()
-
-        if response.text:
-            return response.json()
-
-        return {}
-
-    def get_all(self, endpoint, key=None, **kwargs):
-        items = []
-        total = None
-        if "params" not in kwargs:
-            kwargs["params"] = {}
-        if "page" in kwargs:
-            kwargs["params"]["page"] = kwargs.pop("page")
-        if "per_page" in kwargs:
-            kwargs["params"]["per_page"] = kwargs.pop("per_page")
-
-        if key is None:
-            key = endpoint
-
-        while True:
-            response = self.request("GET", endpoint, **kwargs)
-
-            if "total" not in response:
-                raise Auth0Error(f"get_all {endpoint}: Missing total")
-
-            if key not in response:
-                raise Auth0Error(f"get_all {endpoint}: Missing key {key}")
-
-            if total is None:
-                total = response["total"]
-
-            if total != response["total"]:
-                raise Auth0Error(f"get_all {endpoint}: Total changed")
-
-            items.extend(response[key])
-
-            if len(items) >= total:
-                break
-
-            if len(response[key]) < 1:
-                break
-
-            if "page" not in kwargs["params"]:
-                kwargs["params"]["page"] = 1
-
-            kwargs["params"]["page"] += 1
-
-        return items
-
-
-class AuthorizationAPI(APIClient):
-    base_url = settings.AUTH0["authorization_extension_url"]
-    audience = "urn:auth0-authz-api"
-
-    def get_users(self):
-        return self.get_all("users", page=0, per_page=100)
-
-    def get_group(self, group_name):
-        groups = [
-            group for group in self.get_all("groups") if group["name"] == group_name
-        ]
-
-        if len(groups) != 1:
-            return None
-
-        return groups[0]
-
-    def get_group_members(self, group_name):
-        group = self.get_group(group_name)
-        if group:
-            return self.get_all(
-                f'groups/{group["_id"]}/members', key="users", per_page=25
-            )
-
-    def add_group_members(self, group_name, emails, user_options={}):
-        group = self.get_group(group_name)
-        mgmt = ManagementAPI()
-        users = self.get_users()
-        user_lookup = {user["email"]: user for user in users if "email" in user}
-
-        def has_options(user):
-            for identity in user["identities"]:
-                if all(item in identity.items() for item in user_options.items()):
-                    return True
-
-        users_to_add = OrderedDict()
-
-        for email in emails:
-            user = user_lookup.get(email)
-
-            if user and has_options(user):
-                users_to_add[email] = user
-
-            else:
-                users_to_add[email] = mgmt.create_user(
-                    email=email, email_verified=True, **user_options
-                )
-
-        response = self.request(
-            "PATCH",
-            f'groups/{group["_id"]}/members',
-            json=[user["user_id"] for user in users_to_add.values()],
+    try:
+        token = get_token.client_credentials(
+            settings.OIDC_RP_CLIENT_ID,
+            settings.OIDC_RP_CLIENT_SECRET,
+            audience,
         )
 
-        if "error" in response:
-            raise Auth0Error("add_group_members", response)
-
-        return users_to_add.values()
-
-    def delete_group_members(self, group_name, user_ids):
-        group = self.get_group(group_name)
-        if group is None:
-            return None
-
-        response = self.request(
-            "DELETE", f'groups/{group["_id"]}/members', json=user_ids
+    except auth0.v3.exceptions.Auth0Error as error:
+        raise Auth0Error(
+            f"Failed getting Auth0 access token for client "
+            f"{settings.OIDC_RP_CLIENT_ID} for audience {audience} "
+            f"at {settings.OIDC_DOMAIN}: {error}"
         )
 
-        if "error" in response:
-            raise Auth0Error("delete_group_members", response)
+    return token["access_token"]
 
 
-class ManagementAPI(APIClient):
-    base_url = f"https://{settings.AUTH0['domain']}/api/v2/"
-    audience = base_url
+def authorization():
+    return Authorization(
+        settings.OIDC_DOMAIN,
+        get_access_token(audience='urn:auth0-authz-api'),
+    )
 
-    def create_user(self, email, email_verified=False, **kwargs):
-        if "nickname" not in kwargs:
-            kwargs["nickname"], _, _ = email.partition('@')
 
-        response = self.request(
-            "POST",
-            "users",
-            json={"email": email, "email_verified": email_verified, **kwargs},
+def management():
+    return auth0.v3.management.Auth0(
+        settings.OIDC_DOMAIN,
+        get_access_token(audience=f'https://{settings.OIDC_DOMAIN}/api/v2/'),
+    )
+
+
+def get_all(self, getter_fn, results_key, start_page=0):
+    """
+    Request consecutive pages of results until no more pages and return the
+    aggregated list of results
+    """
+    items = []
+    page = start_page
+    total = None
+    while True:
+        response = getter_fn(page)
+
+        if "total" not in response:
+            raise Auth0Error(f"get_all: Missing total")
+
+        if key not in response:
+            raise Auth0Error(f"get_all: Missing key {results_key}")
+
+        if total is None:
+            total = response["total"]
+
+        if total != response["total"]:
+            raise Auth0Error(f"get_all: Total changed")
+
+        items.extend(response[results_key])
+
+        if len(items) >= total:
+            break
+
+        if len(response[results_key]) < 1:
+            break
+
+        page += 1
+
+    return items
+
+
+def get_users():
+    mgmt = management()
+
+    def users_page(page):
+        return mgmt.users.list(
+            include_totals=True,
+            page=page,
+            per_page=100,  # max value 100 :/
+            q='identities.connection:"github"',
         )
 
-        if "error" in response:
-            raise Auth0Error("create_user", response)
+    return get_all(users_page, 'users')
 
-        return response
 
-    def get_user(self, user_id):
-        response = self.request("GET", f"users/{user_id}")
+def get_group_by_name(group_name, api=None):
+    api = api or authorization()
+    groups = api.groups.list()
+    return next(group for group in groups if group['name'] == group_name)
 
-        if "error" in response:
-            raise Auth0Error("get_user", response)
 
-        return response
+def get_customers(group_name):
+    api = api or authorization()
+    group = get_group_by_name(group_name, api)
+    return get_all(
+        lambda page: api.groups.list_members(group['id'], page),
+        start_page=1,
+    )
 
-    def list_users(self, **kwargs):
-        response = self.request("GET", "users", **kwargs)
-
-        if "error" in response:
-            raise Auth0Error("list_users", response)
-
-        return response
-
-    def reset_mfa(self, user_id):
-        provider = "google-authenticator"
-        response = self.request(
-            "DELETE",
-            f"users/{user_id}/multifactor/{provider}",
+def add_customers(group_name, emails):
+    authz = authorization()
+    mgmt = management()
+    group = get_group_by_name(group_name, api=authz)
+    # get all existing customers (in all groups)
+    # TODO - cache this?
+    customers = {
+        user['email']: user
+        for users in get_all(
+            lambda page: authz.users.list(page, per_page=200),
+            start_page=1,
         )
+        if 'email' in user
+    }
+    # map input emails to user ids
+    user_ids = []
+    for email in emails:
+        user = customers.get(email)
+        if user:
+            if not any(
+                identity['connection'] == 'email'
+                for identity in user['identities']
+            ):
+                # user doesn't exist, so create them and add them to the group
+                nickname, _, _ = email.partition('@')
+                user = mgmt.users.create({
+                    email=email,
+                    email_verified=True,
+                    connection='email',
+                    nickname=nickname,
+                })
+                user_ids.append(user['user_id'])
 
-        if "error" in response:
-            raise Auth0Error("reset_mfa", response)
+    authz.groups.add_members(group['id'], user_ids)
 
-        return response
+
+def delete_customers(group_name, user_ids):
+    group = get_group(group_name)
+    authorization().groups.delete_members(group['id'], user_ids)
+
+
+def get_user_identity(user_id, provider):
+    user = management().users.get(user_id)
+    for identity in user['identities']:
+        if identity['provider'] == provider:
+            return identity
+
+
+def reset_mfa(user_id):
+    management().users.delete_multifactor(user_id, 'google-authenticator')
+
+
+def get_or_create_client(name, **params):
+    mgmt = management()
+    client = next(
+        (client for client in mgmt.clients.all() if client['name'] == name),
+        None,
+    )
+    if client is None:
+        client = mgmt.clients.create({'name': name, **params})
+    else:
+        log.warning(f"Reusing existing Auth0 client for {app.name}")
+    return client
+
