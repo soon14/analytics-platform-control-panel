@@ -17,6 +17,10 @@ class App(TimeStampedModel):
     slug = AutoSlugField(populate_from='_repo_name', slugify_function=s3_slugify)
     repo_url = models.URLField(max_length=512, blank=False, unique=True)
     created_by = models.ForeignKey("User", on_delete=models.SET_NULL, null=True)
+    buckets = models.ManyToManyField(
+        'S3Bucket',
+        through='AppS3Bucket',
+    )
 
     class Meta:
         db_table = "control_panel_api_app"

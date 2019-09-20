@@ -11,6 +11,11 @@ class User(AbstractUser):
     auth0_id = models.CharField(max_length=128, primary_key=True)
     name = models.CharField(max_length=256, blank=True)
     email_verified = models.BooleanField(default=False)
+    buckets = models.ManyToManyField('S3Bucket', through='UserS3Bucket')
+    apps = models.ManyToManyField(
+        'App',
+        through='UserApp',
+    )
 
     REQUIRED_FIELDS = ['email', 'auth0_id']
 

@@ -21,18 +21,21 @@ class AccessToS3Bucket(TimeStampedModel):
     )
 
     s3bucket = models.ForeignKey(
-        "S3Bucket", related_name='%(class)ss', on_delete=models.CASCADE)
+        "S3Bucket",
+        related_name='%(class)ss',
+        on_delete=models.CASCADE,
+    )
     access_level = models.CharField(
-        max_length=9, choices=ACCESS_LEVELS, default=READONLY)
+        max_length=9,
+        choices=ACCESS_LEVELS,
+        default=READONLY,
+    )
 
     class Meta:
         abstract = True
 
     def has_readwrite_access(self):
         return self.access_level == self.READWRITE
-
-    def aws_role_name(self):
-        raise NotImplementedError
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)

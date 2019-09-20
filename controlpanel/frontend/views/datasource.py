@@ -220,6 +220,7 @@ class GrantAccess(LoginRequiredMixin, PermissionRequiredMixin, CreateView):
 
     def get_context_data(self):
         context = super().get_context_data()
+        context['context_object_name'] = self.context_object_name
         bucket = get_object_or_404(S3Bucket, pk=self.kwargs['pk'])
         context['bucket'] = bucket
         member_ids = list(bucket.users3buckets.all().select_related('user').values_list(
