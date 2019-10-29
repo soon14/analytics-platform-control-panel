@@ -280,7 +280,12 @@ class ToolDeployment():
     def get_deployments(cls, user, id_token, search_name=None, search_version=None):
         deployments = []
         k8s = KubernetesClient(id_token=id_token)
-        results = k8s.AppsV1Api.list_namespaced_deployment(user.k8s_namespace)
+        try:
+            results = k8s.AppsV1Api.list_namespaced_deployment(user.k8s_namespace)
+        except k8s.ApiException as e:
+            msg = f'Failed getting deployments for {user}: {str(e)}'
+            log.error(msg)
+            raise ToolDeploymentError(msg) from e
         for deployment in results.items:
             app_name = deployment.metadata.labels["app"]
             _, version = deployment.metadata.labels["chart"].rsplit("-", 1)

@@ -29,10 +29,14 @@ class ToolList(LoginRequiredMixin, PermissionRequiredMixin, ListView):
         user = self.request.user
         id_token = user.get_id_token()
 
-        deployments = ToolDeployment.objects.filter(
-            user=user,
-            id_token=id_token,
-        )
+        try:
+            deployments = ToolDeployment.objects.filter(
+                user=user,
+                id_token=id_token,
+            )
+        except ToolDeployment.Error:
+            messages.error("Failed listing tools")
+            deployments = []
 
         context = super().get_context_data(*args, **kwargs)
         context["id_token"] = id_token

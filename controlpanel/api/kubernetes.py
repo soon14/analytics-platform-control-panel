@@ -74,3 +74,6 @@ class KubernetesClient:
             return api_class(self.api_client)
 
         return super().__getattr__(name)
+
+
+KubernetesClient.ApiException = kubernetes.client.rest.ApiException
