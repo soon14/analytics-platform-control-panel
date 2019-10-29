@@ -119,6 +119,7 @@ class GrantAccessForm(forms.Form):
             ("readwrite", "Read/write"),
             ("admin", "Admin"),
         ],
+        required=True,
     )
     paths = SimpleArrayField(
         forms.CharField(
