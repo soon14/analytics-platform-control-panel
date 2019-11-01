@@ -53,6 +53,8 @@ class S3Bucket(TimeStampedModel):
 
     objects = S3BucketQuerySet.as_manager()
 
+    NameTaken = cluster.S3Bucket.NameTaken
+
     class Meta:
         db_table = "control_panel_api_s3bucket"
         ordering = ('name',)

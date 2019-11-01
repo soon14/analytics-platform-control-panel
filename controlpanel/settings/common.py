@@ -306,84 +306,37 @@ REST_FRAMEWORK = {
 
 
 # -- Logging
-
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "default": {"format": "%(asctime)s %(name)s %(levelname)s %(message)s"}
+        "simple": {
+            "format": "[%(asctime)s] [%(levelname)s] %(module)s %(message)s",
+        },
+        "logstash": {
+            "class": "logstash_formatter.LogstashFormatterV1",
+        },
     },
     "handlers": {
         "console": {
-            "level": "DEBUG",
             "class": "logging.StreamHandler",
-            "formatter": "default",
-        }
+            "formatter": os.environ.get("LOG_FORMATTER", "logstash"),
+        },
     },
     "loggers": {
         "": {
             "handlers": ["console"],
-            "level": os.environ.get("LOG_LEVEL", "DEBUG"),
-        },
-        "aioredis": {
-            "handlers": ["console"],
             "level": "WARNING",
         },
-        "asyncio": {
+        "controlpanel": {
             "handlers": ["console"],
-            "level": "WARNING",
-        },
-        "boto3": {
-            "handlers": ["console"],
-            "level": "WARNING",
-        },
-        "botocore": {
-            "handlers": ["console"],
-            "level": "WARNING",
-        },
-        "daphne": {
-            "handlers": ["console"],
-            "level": "WARNING",
+            "level": os.environ.get("LOG_LEVEL", "INFO").upper(),
+            "propagate": False,
         },
         "django": {
             "handlers": ["console"],
             "level": "WARNING",
-        },
-        "elasticsearch": {
-            "handlers": ['console'],
-            "level": "WARNING",
-        },
-        "github": {
-            "handlers": ["console"],
-            "level": "WARNING",
-        },
-        "gunicorn": {
-            "handlers": ["console"],
-            "level": "WARNING",
-        },
-        "kubernetes": {
-            "handlers": ["console"],
-            "level": "WARNING",
-        },
-        "mozilla_django_oidc": {
-            "handlers": ["console"],
-            "level": "WARNING",
-        },
-        "requests_oauthlib": {
-            "handlers": ["console"],
-            "level": "WARNING",
-        },
-        "rules": {
-            "handlers": ["console"],
-            "level": "WARNING",
-        },
-        "urllib3": {
-            "handlers": ["console"],
-            "level": "WARNING",
-        },
-        "uvicorn": {
-            "handlers": ["console"],
-            "level": "WARNING",
+            "propagate": False,
         },
     },
 }

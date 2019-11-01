@@ -173,9 +173,14 @@ def delete_role(name):
     role.delete()
 
 
+class S3BucketNameTaken(Exception):
+    pass
+
+
 def create_bucket(bucket_name, is_data_warehouse=False):
+    s3 = boto3.resource('s3')
     try:
-        bucket = boto3.resource('s3').create_bucket(
+        bucket = s3.create_bucket(
             Bucket=bucket_name,
             ACL='private',
             CreateBucketConfiguration={
@@ -188,9 +193,13 @@ def create_bucket(bucket_name, is_data_warehouse=False):
                 'Value': 'datawarehouse',
             }]})
 
-    except bucket.meta.client.exceptions.BucketAlreadyOwnedByYou:
+    except s3.meta.client.exceptions.BucketAlreadyOwnedByYou:
         log.warning(f'Skipping creating Bucket {bucket_name}: Already exists')
         return
+
+    except s3.meta.client.exceptions.BucketAlreadyExists as err:
+        log.error(f'Bucket {bucket_name} already belongs to someone else')
+        raise S3BucketNameTaken from err
 
     bucket.Logging().put(BucketLoggingStatus={'LoggingEnabled': {
         'TargetBucket': settings.LOGS_BUCKET_NAME,

@@ -148,11 +148,14 @@ class CreateDatasource(
     def form_valid(self, form):
         name = form.cleaned_data['name']
         datasource_type = self.request.GET.get("type")
-        self.object = S3Bucket.objects.create(
-            name=name,
-            created_by=self.request.user,
-            is_data_warehouse=datasource_type == "warehouse",
-        )
+        try:
+            self.object = S3Bucket.objects.create(
+                name=name,
+                created_by=self.request.user,
+                is_data_warehouse=datasource_type == "warehouse",
+            )
+        except S3Bucket.NameTaken:
+            return FormMixin.form_invalid(self, form)
         messages.success(
             self.request,
             f"Successfully created {name} {datasource_type} data source",

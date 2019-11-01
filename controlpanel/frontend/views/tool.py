@@ -35,7 +35,7 @@ class ToolList(LoginRequiredMixin, PermissionRequiredMixin, ListView):
                 id_token=id_token,
             )
         except ToolDeployment.Error:
-            messages.error("Failed listing tools")
+            messages.error(self.request, "Failed listing tools")
             deployments = []
 
         context = super().get_context_data(*args, **kwargs)

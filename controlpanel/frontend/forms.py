@@ -111,6 +111,12 @@ class CreateDatasourceForm(forms.Form):
         ],
     )
 
+    def clean_name(self):
+        name = self.cleaned_data['name']
+        if S3Bucket.objects.filter(name=name).exists():
+            raise ValidationError(f"S3 bucket named {name} already exists")
+        return name
+
 
 class GrantAccessForm(forms.Form):
     access_level = forms.ChoiceField(

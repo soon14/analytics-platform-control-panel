@@ -116,6 +116,9 @@ class App:
 
 class S3Bucket:
     """Wraps a S3Bucket model to provide convenience methods for AWS"""
+
+    NameTaken = aws.S3BucketNameTaken
+
     def __init__(self, bucket):
         self.bucket = bucket
 
