@@ -339,6 +339,10 @@ class ManagedS3AccessPolicy(S3AccessPolicy):
         return self
 
 
+class GrantBucketAccessError(Exception):
+    pass
+
+
 def grant_bucket_access(role_name, bucket_arn, access_level, path_arns=[]):
     if access_level not in ('readonly', 'readwrite'):
         raise ValueError("access_level must be one of 'readwrite' or 'readonly'")
@@ -346,7 +350,12 @@ def grant_bucket_access(role_name, bucket_arn, access_level, path_arns=[]):
     if bucket_arn and not path_arns:
         path_arns = [bucket_arn]
 
-    role = boto3.resource('iam').Role(role_name)
+    iam = boto3.resource('iam')
+    try:
+        role = iam.Role(role_name)
+    except iam.meta.client.exceptions.NoSuchEntityException as e:
+        raise GrantBucketAccessError from e
+
     policy = S3AccessPolicy(role.Policy('s3-access'))
     policy.revoke_access(bucket_arn)
     for arn in path_arns:
@@ -362,7 +371,16 @@ def revoke_bucket_access(role_name, bucket_arn=None, path_arns=[]):
             log.warning(f'Asked to revoke {role_name} role access to nothing')
             return
 
-    role = boto3.resource('iam').Role(role_name)
+    iam = boto3.resource('iam')
+    try:
+        role = iam.Role(role_name)
+    except iam.meta.client.exceptions.NoSuchEntityException:
+        log.warning(
+            f'Skipping revoking access to {bucket_arn or path_arns}: '
+            f'{role_name} not found'
+        )
+        return
+
     policy = S3AccessPolicy(role.Policy('s3-access'))
     for arn in path_arns:
         policy.revoke_access(arn)

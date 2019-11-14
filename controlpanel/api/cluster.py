@@ -66,10 +66,16 @@ class User:
         helm.delete(f"init-user-{self.user.slug}")
 
     def grant_bucket_access(self, bucket_arn, access_level, path_arns=[]):
-        aws.grant_bucket_access(self.iam_role_name, bucket_arn, access_level, path_arns)
+        try:
+            aws.grant_bucket_access(self.iam_role_name, bucket_arn, access_level, path_arns)
+        except aws.GrantBucketAccessError as e:
+            raise User.GrantBucketAccessError from e
 
     def revoke_bucket_access(self, bucket_arn, path_arns=[]):
         aws.revoke_bucket_access(self.iam_role_name, bucket_arn, path_arns)
+
+    class GrantBucketAccessError(Exception):
+        pass
 
 
 class App:
