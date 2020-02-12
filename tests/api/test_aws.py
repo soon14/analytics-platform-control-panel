@@ -261,6 +261,10 @@ def test_create_bucket(logs_bucket, s3):
     # assert public_access_blocked(bucket)
     # assert tagged(bucket, buckettype=datawarehouse)
 
+    # Test that when bucket already exists raises exception
+    with pytest.raises(aws.S3BucketAlreadyExists):
+        aws.create_bucket(bucket_name, is_data_warehouse=True)
+
 
 def test_create_parameter(ssm):
     aws.create_parameter(

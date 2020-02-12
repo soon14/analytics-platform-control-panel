@@ -31,6 +31,8 @@ from controlpanel.frontend.forms import (
     GrantAccessForm,
 )
 
+from controlpanel.api.aws import S3BucketAlreadyExists
+
 
 DATASOURCE_TYPES = [
     'warehouse',
@@ -148,16 +150,28 @@ class CreateDatasource(
     def form_valid(self, form):
         name = form.cleaned_data['name']
         datasource_type = self.request.GET.get("type")
-        self.object = S3Bucket.objects.create(
-            name=name,
-            created_by=self.request.user,
-            is_data_warehouse=datasource_type == "warehouse",
-        )
-        messages.success(
-            self.request,
-            f"Successfully created {name} {datasource_type} data source",
-        )
-        return FormMixin.form_valid(self, form)
+        try:
+            self.object = S3Bucket.objects.create(
+                name=name,
+                created_by=self.request.user,
+                is_data_warehouse=datasource_type == "warehouse",
+            )
+            messages.success(
+                self.request,
+                f"Successfully created {name} {datasource_type} data source",
+            )
+            return FormMixin.form_valid(self, form)
+        except S3BucketAlreadyExists:
+                # The S3 bucket will not be created in
+                # the CP as it already exists in the AWS
+                # Account because it may contain existing
+                # data. We'll show an error to the user
+                messages.error(
+                    self.request,
+                    f"Can't create {name} {datasource_type} data source because it's already present in AWS account and may contain old data.",
+                )
+                form.add_error("name", "An S3 Bucket with this name is already present in the AWS account.")
+                return FormMixin.form_invalid(self, form)
 
 
 class DeleteDatasource(

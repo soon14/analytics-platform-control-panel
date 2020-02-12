@@ -10,6 +10,10 @@ from django.conf import settings
 log = logging.getLogger(__name__)
 
 
+class S3BucketAlreadyExists(Exception):
+    pass
+
+
 def arn(service, resource, region="", account=""):
     service = service.lower()
     region = region.lower()
@@ -206,15 +210,18 @@ def create_bucket(bucket_name, is_data_warehouse=False):
                 'LocationConstraint': settings.BUCKET_REGION,
             },
         )
-        if is_data_warehouse:
-            bucket.Tagging().put(Tagging={'TagSet': [{
-                'Key': 'buckettype',
-                'Value': 'datawarehouse',
-            }]})
+    except botocore.exceptions.ClientError as e:
+        error_code = e.response["Error"]["Code"]
+        if error_code in ("BucketAlreadyExists", "BucketAlreadyOwnedByYou"):
+            raise S3BucketAlreadyExists(f"Can't create S3 bucket '{bucket_name}', it already exists in AWS account")
+        else:
+            raise e
 
-    except bucket.meta.client.exceptions.BucketAlreadyOwnedByYou:
-        log.warning(f'Skipping creating Bucket {bucket_name}: Already exists')
-        return
+    if is_data_warehouse:
+        bucket.Tagging().put(Tagging={'TagSet': [{
+            'Key': 'buckettype',
+            'Value': 'datawarehouse',
+        }]})
 
     bucket.Logging().put(BucketLoggingStatus={'LoggingEnabled': {
         'TargetBucket': settings.LOGS_BUCKET_NAME,
